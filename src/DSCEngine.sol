@@ -41,6 +41,7 @@ pragma solidity ^0.8.19;
  */
 import {DecentralisedStableCoin} from "./DecentralizedStableCoin.sol";
 import {ReentrancyGuard} from '@openzeppelin/contracts/security/ReentrancyGuard.sol';
+import {IERC20} from '@openzeppelin/contracts/token/ERC20/IERC20.sol';
 
 contract DSCEngine is ReentrancyGuard {
     // Errors
@@ -48,11 +49,17 @@ contract DSCEngine is ReentrancyGuard {
     error DSCEngine__MustBeMoreThanZero();
     error DSCEngine__TokenNotAllowed();
     error DSCEngine__TokenAddressesAndPriceFeedAddressesLengthsAreNotTheSame();
+    error DSCEngine__TransferFailed();
 
     // State variables
 
     mapping(address token => address priceFeed) private s_priceFeeds;
+    mapping(address user => (address token => uint256 amount)) private s_collateralDeposited;
+    mapping(address user => uint256 amountDscMinted) private s_dscMinted;
     DecentralisedStableCoin private immutable I_DSC;
+
+    // Events
+    event CollateralDeposited(address indexed user, address indexed token, uint256 amount);
 
     // Modifiers
 
@@ -87,6 +94,7 @@ contract DSCEngine is ReentrancyGuard {
     function depositCollateralAndMintDsc() external {}
 
     /**
+     * @noitice Follows CEI pattern: Checks-Effects-Interactions
      * @param _tokenCollateralAddress The address of the token to deposit as collateral
      * @param _amountCollateral The amount of collateral to deposit
      */
@@ -95,17 +103,50 @@ contract DSCEngine is ReentrancyGuard {
         moreThanZero(_amountCollateral)
         isAllowedToken(_tokenCollateralAddress)
         nonReentrant
-    {}
+    {
+        s_collateralDeposited[msg.sender][_tokenCollateralAddress] += _amountCollateral;
+        emit CollateralDeposited(msg.sender, _tokenCollateralAddress, _amountCollateral);
+        bool success = IERC20(_tokenCollateralAddress).transferFrom(msg.sender, address(this), _amountCollateral);
+        if(!success) {
+            revert DSCEngine__TransferFailed();
+        }
+    }
 
     function redeemCollateralForDsc() external {}
 
     function redeemCollateral() external {}
 
-    function mintDsc() external {}
+    /**
+     * @notice Follows CEI pattern: Checks-Effects-Interactions
+     * @param _amountDscToMint The amount of DSC to mint
+     * @notice Must have more collateral than the minimum threshold
+     */
+    function mintDsc(uint256 _amountDscToMint) moreThanZero(amountDscToMint) nonReentrant external {
+        s_dscMinted[msg.sender] += _amountDscMinted;
+        revertIfHealthFactorIsBroken(msg.senfer);
+        bool minted = I_DSC.mint(msg.sender, _amountDscToMint);
+    }
 
     function burnDsc() external {}
 
     function liquidate() external {}
 
     function getHealthFactor() external view {}
+
+    // Private & Internal functions
+    function _getAccountInformation(address _user) private view returns (uint256 totalDscMinted, uint256 collateralValueInUsd) {
+        totalDscMinted = s_dscMinted[_user];
+    }
+
+    /**
+     * Returns how close a user is to liquidation
+     * If health factor is below 1, user can be liquidated
+     */
+    function _healthFactor(address _user) private view returns (uint256) {
+        (uint256 totalDscMinted, uint256 collateralValueInUsd) = _getAccountInformation(_user);
+    }
+
+    function _revertIfHealthFactorIsBroken(address _user) internal view {
+
+    }
 }

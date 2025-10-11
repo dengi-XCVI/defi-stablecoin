@@ -39,8 +39,8 @@ pragma solidity ^0.8.19;
  * @notice This contract is the core of the DSC system. It handles all the logic for minting and redeeming DSC, as well as depositing and withdrawing collateral.
  * @notice This contract is loosely based on the MakerDAO DSS (DAI STablecoin System).
  */
-import {DecentralisedStableCoin} from "./DecentralizedStableCoin.sol";
-import {ReentrancyGuard} from '@openzeppelin/contracts/security/ReentrancyGuard.sol';
+import {DecentralizedStableCoin} from "./DecentralizedStableCoin.sol";
+import {ReentrancyGuard} from '@openzeppelin/contracts/utils/ReentrancyGuard.sol';
 import {IERC20} from '@openzeppelin/contracts/token/ERC20/IERC20.sol';
 
 contract DSCEngine is ReentrancyGuard {
@@ -54,9 +54,9 @@ contract DSCEngine is ReentrancyGuard {
     // State variables
 
     mapping(address token => address priceFeed) private s_priceFeeds;
-    mapping(address user => (address token => uint256 amount)) private s_collateralDeposited;
+    mapping(address user => mapping(address token => uint256 amount)) private s_collateralDeposited;
     mapping(address user => uint256 amountDscMinted) private s_dscMinted;
-    DecentralisedStableCoin private immutable I_DSC;
+    DecentralizedStableCoin private immutable I_DSC;
 
     // Events
     event CollateralDeposited(address indexed user, address indexed token, uint256 amount);
@@ -94,7 +94,7 @@ contract DSCEngine is ReentrancyGuard {
     function depositCollateralAndMintDsc() external {}
 
     /**
-     * @noitice Follows CEI pattern: Checks-Effects-Interactions
+     * @notice Follows CEI pattern: Checks-Effects-Interactions
      * @param _tokenCollateralAddress The address of the token to deposit as collateral
      * @param _amountCollateral The amount of collateral to deposit
      */
@@ -121,9 +121,9 @@ contract DSCEngine is ReentrancyGuard {
      * @param _amountDscToMint The amount of DSC to mint
      * @notice Must have more collateral than the minimum threshold
      */
-    function mintDsc(uint256 _amountDscToMint) moreThanZero(amountDscToMint) nonReentrant external {
-        s_dscMinted[msg.sender] += _amountDscMinted;
-        revertIfHealthFactorIsBroken(msg.senfer);
+    function mintDsc(uint256 _amountDscToMint) moreThanZero(_amountDscToMint) nonReentrant external {
+        s_dscMinted[msg.sender] += _amountDscToMint;
+        _revertIfHealthFactorIsBroken(msg.sender);
         bool minted = I_DSC.mint(msg.sender, _amountDscToMint);
     }
 
@@ -134,6 +134,11 @@ contract DSCEngine is ReentrancyGuard {
     function getHealthFactor() external view {}
 
     // Private & Internal functions
+    function _getAccountCollateralValue(address _user) private view returns (uint256 collateralValueInUsd) {
+        collateralValueInUsd = 0;
+        return collateralValueInUsd;
+    }
+
     function _getAccountInformation(address _user) private view returns (uint256 totalDscMinted, uint256 collateralValueInUsd) {
         totalDscMinted = s_dscMinted[_user];
         collateralValueInUsd = _getAccountCollateralValue(_user);

@@ -54,6 +54,7 @@ contract DSCEngine is ReentrancyGuard {
     error DSCEngine__HealthFactorIsBroken(uint256 healthFactor);
     error DSCEngine__MintFailed();
     error DSCEngine__HealthFactorOk();
+    error DSCEngine__HealthFactorNotImproved();
 
     // State variables
     uint256 private constant ADDITIONAL_FEED_PRECISION = 1e10; // Chainlink price feeds have commonly 8 decimals
@@ -71,7 +72,7 @@ contract DSCEngine is ReentrancyGuard {
 
     // Events
     event CollateralDeposited(address indexed user, address indexed token, uint256 amount);
-    event CollateralRedeemed(address indexed user, address indexed token, uint256 amount);
+    event CollateralRedeemed(address indexed redeemedFrom, address indexed redeemedTo, address indexed token, uint256 amount);
 
     // Modifiers
 
@@ -148,12 +149,7 @@ contract DSCEngine is ReentrancyGuard {
     }
 
     function redeemCollateral(address _tokenCollateral, uint256 _amountCollateral) public moreThanZero(_amountCollateral) nonReentrant{
-        s_collateralDeposited[msg.sender][_tokenCollateral] -= _amountCollateral;
-        emit CollateralRedeemed(msg.sender, _tokenCollateral, _amountCollateral);
-        bool success = IERC20(_tokenCollateral).transfer(msg.sender, _amountCollateral);
-        if(!success) {
-            revert DSCEngine__TransferFailed();
-        }
+        _redeemCollateral(msg.sender, msg.sender, _tokenCollateral, _amountCollateral);
         _revertIfHealthFactorIsBroken(msg.sender);
     }
 
@@ -172,14 +168,7 @@ contract DSCEngine is ReentrancyGuard {
     }
 
     function burnDsc(uint256 _amount) public moreThanZero(_amount) nonReentrant  {
-        s_dscMinted[msg.sender] -= _amount;
-        bool success = I_DSC.transferFrom(msg.sender, address(this), _amount);
-
-        // Following error not really needed since DSC's transferFrom will revert if it fails
-        if (!success) {
-            revert DSCEngine__TransferFailed();
-        }
-        I_DSC.burn(_amount);
+        _burnDsc(msg.sender,msg.sender,_amount);
         _revertIfHealthFactorIsBroken(msg.sender); // Probably not needed, maybe if user burns too much
     }
 
@@ -204,13 +193,45 @@ contract DSCEngine is ReentrancyGuard {
         // Liquidator also gets a 10% bonus, for 100$ of debt covered, liquidator gets 110$
         uint256 bonusCollateral = (tokenAmountFromDebtCoverd * LIQUIDATION_BONUS) / LIQUIDATION_PRECISION;
         uint256 totalCollateralToRedeem = tokenAmountFromDebtCoverd + bonusCollateral;
-        
+        _redeemCollateral(_user, msg.sender, _tokenCollateral, totalCollateralToRedeem);
+        _burnDsc(_user, msg.sender, _debtToCover);
 
+        uint256 endingUserHealthFactor = _healthFactor(_user);
+        if (endingUserHealthFactor <= startingUserlHealthFactor) {
+            revert DSCEngine__HealthFactorNotImproved();
+        }
+        _revertIfHealthFactorIsBroken(msg.sender);
     }
 
     function getHealthFactor() external view {}
 
     // Private & Internal functions
+
+    /**
+     * 
+     * @dev Low-level internal functions, do not call unless health factor is checked in the function calling them 
+     */
+    function _burnDsc(address _onBehalfOf, address _dscFrom,uint256 _amount) private {
+        s_dscMinted[_onBehalfOf] -= _amount;
+        bool success = I_DSC.transferFrom(_dscFrom, address(this), _amount);
+
+        // Following error not really needed since DSC's transferFrom will revert if it fails
+        if (!success) {
+            revert DSCEngine__TransferFailed();
+        }
+        I_DSC.burn(_amount);
+    }
+
+    function _redeemCollateral(address _from, address _to, address _tokenCollateral, uint256 _amount) private {
+        s_collateralDeposited[_from][_tokenCollateral] -= _amount;
+        emit CollateralRedeemed(_from, _to, _tokenCollateral, _amount);
+        bool success = IERC20(_tokenCollateral).transfer(_to, _amount);
+        if(!success) {
+            revert DSCEngine__TransferFailed();
+        }
+        _revertIfHealthFactorIsBroken(msg.sender);
+    }
+
     function _getAccountInformation(address _user) private view returns (uint256 totalDscMinted, uint256 collateralValueInUsd) {
         totalDscMinted = s_dscMinted[_user];
         collateralValueInUsd = getAccountCollateralValue(_user);

@@ -61,7 +61,7 @@ contract DSCEngine is ReentrancyGuard {
     uint256 private constant PRECISION = 1e18;
     uint256 private constant LIQUIDATION_THRESHOLD = 50; // 200% overcollateralized
     uint256 private constant LIQUIDATION_PRECISION = 100;
-    uint256 private constant MINIMUM_HEALTH_FACTOR = 1;
+    uint256 private constant MINIMUM_HEALTH_FACTOR = 1e18; // 1.0 with 18 decimals of precision
     uint256 private constant LIQUIDATION_BONUS = 10;
 
     mapping(address token => address priceFeed) private s_priceFeeds;
@@ -203,7 +203,7 @@ contract DSCEngine is ReentrancyGuard {
         _revertIfHealthFactorIsBroken(msg.sender);
     }
 
-    function getHealthFactor() external view {}
+    
 
     // Private & Internal functions
 
@@ -244,8 +244,11 @@ contract DSCEngine is ReentrancyGuard {
      */
     function _healthFactor(address _user) private view returns (uint256) {
         (uint256 totalDscMinted, uint256 collateralValueInUsd) = _getAccountInformation(_user);
+        if (totalDscMinted == 0) {
+            return type(uint256).max;
+        }
         uint256 collateralAdjustedForThreshold = (collateralValueInUsd * LIQUIDATION_THRESHOLD) / LIQUIDATION_PRECISION;
-        return (collateralAdjustedForThreshold * PRECISION) / totalDscMinted;
+        return ((collateralAdjustedForThreshold  * PRECISION) / totalDscMinted);
     }
 
     function _revertIfHealthFactorIsBroken(address _user) internal view {
@@ -278,5 +281,14 @@ contract DSCEngine is ReentrancyGuard {
         AggregatorV3Interface priceFeed = AggregatorV3Interface(s_priceFeeds[token]);
         (,int256 price,,,) = priceFeed.latestRoundData();
         return ((uint256(price) * ADDITIONAL_FEED_PRECISION) * amount) / PRECISION;
+    }
+
+    function getAccountInformation(address user) external view returns (uint256, uint256) {
+        (uint totalDscMinted, uint totalCollateralValueInUsd) = _getAccountInformation(user);
+        return (totalDscMinted, totalCollateralValueInUsd);
+    }
+    
+    function getHealthFactor(address user) external view returns (uint256) {
+        return _healthFactor(user);
     }
 }

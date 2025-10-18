@@ -7,3 +7,4 @@
 3. Collateral type: Exogenous (crypto)
    1. wETH
    2. wBTC
+

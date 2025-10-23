@@ -229,7 +229,7 @@ contract DSCEngine is ReentrancyGuard {
         if(!success) {
             revert DSCEngine__TransferFailed();
         }
-        _revertIfHealthFactorIsBroken(msg.sender);
+        _revertIfHealthFactorIsBroken(_from);
     }
 
     function _getAccountInformation(address _user) private view returns (uint256 totalDscMinted, uint256 collateralValueInUsd) {
@@ -298,5 +298,11 @@ contract DSCEngine is ReentrancyGuard {
 
     function getCollateralBalanceOfUser(address user, address token) external view returns (uint256) {
         return s_collateralDeposited[user][token];
+    }
+
+    function getMaxMintableDsc(address user) external view returns (int256) {
+        uint256 collateralValueInUsd = uint256(getAccountCollateralValue(user));
+        int256 threshold = int256((collateralValueInUsd * LIQUIDATION_THRESHOLD) / (LIQUIDATION_PRECISION));
+        return threshold - int256(s_dscMinted[user]);
     }
 }

@@ -24,6 +24,7 @@ contract InvariantsTest is StdInvariant ,Test {
     HelperConfig config;
     address weth;
     address wbtc;
+    Handler handler;
 
     function setUp() public {
         // Set up code if needed
@@ -32,11 +33,12 @@ contract InvariantsTest is StdInvariant ,Test {
         (dsc,dscEngine,config) = deployer.run();
         (,,weth,wbtc,) = config.getActiveNetworkConfig();
 
-        Handler handler = new Handler(dscEngine, dsc);
+        handler = new Handler(dscEngine, dsc);
         targetContract(address(handler));
         
     }
     // Handler
+
 
     function invariant_DscTotalSupplyLessThanCollateral() public view {
         // totalSupply <= totalCollateralValue
@@ -48,6 +50,7 @@ contract InvariantsTest is StdInvariant ,Test {
 
         console.log("Total DSC Supply:", totalSupply);
         console.log("Total Collateral Value in USD:", totalCollateralValue);
+        console.log("Times Mint is called:", handler.timesMintIsCalled());
 
 
         assert(totalSupply <= totalCollateralValue);    

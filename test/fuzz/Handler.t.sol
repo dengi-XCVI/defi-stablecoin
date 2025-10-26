@@ -8,6 +8,7 @@ import {Test,console} from 'forge-std/Test.sol';
 import {DSCEngine} from '../../src/DSCEngine.sol';
 import {DecentralizedStableCoin} from '../../src/DecentralizedStableCoin.sol';
 import {ERC20Mock} from '@openzeppelin/contracts/mocks/token/ERC20Mock.sol';
+import {MockV3Aggregator} from '../unit/mocks/MockV3Aggregator.sol';
 
 contract Handler is Test {
     DSCEngine dscEngine;
@@ -15,6 +16,7 @@ contract Handler is Test {
 
     ERC20Mock weth;
     ERC20Mock wbtc;
+    MockV3Aggregator ethUsdPriceFeed;
 
     uint256 MAX_DEPOSIT_SIZE = type(uint96).max;
     uint256 public timesMintIsCalled = 0;  
@@ -28,6 +30,8 @@ contract Handler is Test {
         address[] memory collateralTokens = dscEngine.getCollateralTokens();
         weth = ERC20Mock(collateralTokens[0]);
         wbtc = ERC20Mock(collateralTokens[1]);
+
+        ethUsdPriceFeed = MockV3Aggregator(dscEngine.getPriceFeed(address(weth)));
 
     }
 
@@ -85,6 +89,13 @@ contract Handler is Test {
         }
         vm.stopPrank();
     }
+
+
+    // This breaks the invariant assertion, when price drops too low
+    //function updateCollateralPrice(uint96 _newPrice) public {
+    //    int256 newPrice = int256(uint256(_newPrice));
+    //    ethUsdPriceFeed.updateAnswer(newPrice);
+    //}
 
     //// Helper functions///////////
 

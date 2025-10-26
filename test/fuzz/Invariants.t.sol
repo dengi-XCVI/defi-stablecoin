@@ -57,7 +57,11 @@ contract InvariantsTest is StdInvariant ,Test {
     }
 
     function invariant_GettersNeverRevert() public view {
-        // Call all getters
+        // Put all getters here
+        dscEngine.getCollateralTokens();
+        dscEngine.getAccountCollateralValue(address(1));
+        dscEngine.getUsdValue(weth, 1e18);
+        dscEngine.getMaxMintableDsc(address(1));
     }
 
 }

@@ -43,6 +43,7 @@ import {DecentralizedStableCoin} from "./DecentralizedStableCoin.sol";
 import {ReentrancyGuard} from '@openzeppelin/contracts/utils/ReentrancyGuard.sol';
 import {IERC20} from '@openzeppelin/contracts/token/ERC20/IERC20.sol';
 import {AggregatorV3Interface} from '@chainlink/contracts/src/v0.8/interfaces/AggregatorV3Interface.sol'; 
+import {OracleLib} from "./libraries/OracleLib.sol";
 
 contract DSCEngine is ReentrancyGuard {
     // Errors
@@ -55,6 +56,9 @@ contract DSCEngine is ReentrancyGuard {
     error DSCEngine__MintFailed();
     error DSCEngine__HealthFactorOk();
     error DSCEngine__HealthFactorNotImproved();
+
+    // Type
+    using OracleLib for AggregatorV3Interface;
 
     // State variables
     uint256 private constant ADDITIONAL_FEED_PRECISION = 1e10; // Chainlink price feeds have commonly 8 decimals
@@ -262,7 +266,7 @@ contract DSCEngine is ReentrancyGuard {
 
     function getTokenAmountFromUsd(address _tokenCollateral, uint256 _usdAmountInWei) public view returns (uint256) {
         AggregatorV3Interface priceFeed = AggregatorV3Interface(s_priceFeeds[_tokenCollateral]);
-        (,int256  price,,,) = priceFeed.latestRoundData();
+        (,int256  price,,,) = priceFeed.staleCheckLatestRoundData();
 
         return (_usdAmountInWei * PRECISION) / (uint256(price) * ADDITIONAL_FEED_PRECISION);
     }
@@ -279,7 +283,7 @@ contract DSCEngine is ReentrancyGuard {
 
     function getUsdValue(address token, uint256 amount) public view returns (uint256) {
         AggregatorV3Interface priceFeed = AggregatorV3Interface(s_priceFeeds[token]);
-        (,int256 price,,,) = priceFeed.latestRoundData();
+        (,int256 price,,,) = priceFeed.staleCheckLatestRoundData();
         return ((uint256(price) * ADDITIONAL_FEED_PRECISION) * amount) / PRECISION;
     }
 
@@ -302,7 +306,11 @@ contract DSCEngine is ReentrancyGuard {
 
     function getMaxMintableDsc(address user) external view returns (int256) {
         uint256 collateralValueInUsd = uint256(getAccountCollateralValue(user));
-        int256 threshold = int256((collateralValueInUsd * LIQUIDATION_THRESHOLD) / (LIQUIDATION_PRECISION));
-        return threshold - int256(s_dscMinted[user]);
+        int256 maxMintableDsc = ((int256(collateralValueInUsd) / 2) - int256(s_dscMinted[user]));
+        return maxMintableDsc;
+    }
+
+    function getPriceFeed(address token) external view returns (address) {
+        return s_priceFeeds[token];
     }
 }
